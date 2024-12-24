@@ -6,8 +6,9 @@ class SensorManager: ObservableObject {
     @Published var Data_AccelerateAverage:  String = "No Accelerometer Data"
     @Published var Data_Velocity:           String = "0.00 m/s"
     @Published var Data_VelocityAvarage:    String = "0.00 m/s"
-    @Published var Data_Distance:           String = "0.00 m"
+    @Published var Data_TotalDistance:      String = "0.00 m"
     @Published var Data_RelativePosition:   String = "0.00 m"
+    @Published var isRecording: Bool = false
 
     private var motionManager: CMMotionManager
     
@@ -37,7 +38,8 @@ class SensorManager: ObservableObject {
     //その他
     private var dataCount: Int = 0
     private let threshold: Double = 0.4 // 加速度の閾値
-    private var log: [String] = []
+    private var rawLog: [String] = []
+    private var dataLog: [String] = []
     
 
     init() {
@@ -91,12 +93,25 @@ class SensorManager: ObservableObject {
         
         dataCount += 1
         
+        // 加速度センサーの記録
+        var processedData = String(format: "X: %.2f :m/s², Y: %.2f :m/s², Z: %.2f :m/s²", acceleration.x, acceleration.y, acceleration.z)
+        if self.isRecording {
+            let timestamp = self.getCurrentTimestamp()
+            self.rawLog.append("Time: \(timestamp), Acceleration: \(processedData)")
+        }
+        
+        // 速度の記録
+        processedData = String(format: "X: %.2f :m/s, Y: %.2f :m/s, Z: %.2f :m/s", velocityX/*, velocityY, velocityZ*/)
+        if self.isRecording {
+            let timestamp = self.getCurrentTimestamp()
+            self.rawLog.append("Time: \(timestamp), Velocity: \(processedData)")
+        }
+        
         // UI更新
         DispatchQueue.main.async {
             self.Data_AccelerateRaw  = String(format: "X: %.2f m/s², Y: %.2f m/s², Z: %.2f m/s²",  filteredAccelerationX/*, filteredAccelerationY, filteredAccelerationZ*/)
             self.Data_Velocity       = String(format: "X: %.2f m/s, Y: %.2f m/s, Z: %.2f m/s",    self.velocityX/*,        self.velocityY,        self.velocityZ*/)
         }
-        
     }
 
     private func processOneSecondData() {
@@ -117,43 +132,69 @@ class SensorManager: ObservableObject {
 //        distanceY += fabs(meanSpeedY)
 //        distanceZ += fabs(meanSpeedZ)
 
-        // 相対移動距離
+        // 相対位置
         positionX += meanSpeedX
 //        positionY += meanSpeedY
 //        positionZ += meanSpeedZ
+    
+        // 平均加速度の記録
+        var processedData = String(format: "X: %.2f :m/s², Y: %.2f :m/s², Z: %.2f :m/s²", meanAccelerationX/*, meanAccelerationY, meanAccelerationZ*/)
+        if self.isRecording {
+            let timestamp = self.getCurrentTimestamp()
+            self.dataLog.append("Time: \(timestamp), AverageAcceleration: \(processedData)")
+        }
         
-        // データを記録
-        let timestamp = getCurrentTimestamp()
-        let logEntry = """
-        timestamp:\(timestamp), meanAcc:x:\(meanAccelerationX)m/s², \
-        meanSpeed:x:\(meanSpeedX)m/s, distance:\(self.distanceX)m
-        """
-        log.append(logEntry)
+        // 平均速度の記録
+        processedData = String(format: "X: %.2f :m/s, Y: %.2f :m/s, Z: %.2f :m/s", meanSpeedX/*, meanSpeedY, meanSpeedZ*/)
+        if self.isRecording {
+            let timestamp = self.getCurrentTimestamp()
+            self.dataLog.append("Time: \(timestamp), AverageVelocity: \(processedData)")
+        }
+        
+        // 合計移動距離の記録
+        processedData = String(format: "X: %.2f :m, Y: %.2f :m, Z: %.2f :m", distanceX/*, distanceY, distanceZ*/)
+        if self.isRecording {
+            let timestamp = self.getCurrentTimestamp()
+            self.dataLog.append("Time: \(timestamp), TotalDistance: \(processedData)")
+        }
+        
+        // 相対位置の記録
+        processedData = String(format: "X: %.2f :m, Y: %.2f :m, Z: %.2f :m", positionX/*, positionY, positionZ*/)
+        if self.isRecording {
+            let timestamp = self.getCurrentTimestamp()
+            self.dataLog.append("Time: \(timestamp), RelativePosition: \(processedData)")
+        }
 
         // UI更新
         DispatchQueue.main.async {
             self.Data_AccelerateAverage = String(format: "X: %.2f m/s, Y: %.2f m/s, Z: %.2f m/s", meanAccelerationX/*,meanAccelerationY,meanAccelerationZ*/)
             self.Data_VelocityAvarage = String(format: "X: %.2f m/s, Y: %.2f m/s, Z: %.2f m/s", meanSpeedX/*, meanSpeedY, meanSpeedZ*/)
-            self.Data_Distance = String(format:"X: %.2f m, Y: %.2f m, Z: %.2f m", self.distanceX/*, self.distanceY, self.distanceZ*/)
+            self.Data_TotalDistance = String(format:"X: %.2f m, Y: %.2f m, Z: %.2f m", self.distanceX/*, self.distanceY, self.distanceZ*/)
             self.Data_RelativePosition = String(format: "X: %.2f m, Y: %.2f m, Z: %.2f m", self.positionX/*, self.positionY, self.positionZ*/)
             
         }
-
-        // 累積データをリセット
-//        cumulativeAccelerationX = 0.0
-//        dataCount = 0
     }
     
     func culculateAverage(_ values: [Double]) -> Double {
         values.reduce(0, +) / Double(values.count)
     }
+    
+    func toggleRecording() {
+        isRecording.toggle()
+    }
 
-    func saveLog() {
-        let logText = log.joined(separator: "\n")
-        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("sensor_log.txt")
+    func saveLog(){
+        let  rawLogText =  rawLog.joined(separator: "\n")
+        let dataLogText = dataLog.joined(separator: "\n")
+        
+        let  rawFileURL = FileManager.default.temporaryDirectory.appendingPathComponent("rawLog.txt")
+        let dataFileURL = FileManager.default.temporaryDirectory.appendingPathComponent("dataLog.txt")
+        
         do {
-            try logText.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("Log saved to: \(fileURL)")
+            try rawLogText.write(to: rawFileURL, atomically: true, encoding: .utf8)
+            print("rawLog saved to: \(rawFileURL)")
+            try dataLogText.write(to: dataFileURL, atomically: true, encoding: .utf8)
+            print("dataLog saved to: \(dataFileURL)")
         } catch {
             print("Error saving log: \(error.localizedDescription)")
         }
@@ -163,5 +204,15 @@ class SensorManager: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
         return formatter.string(from: Date())
+    }
+    func startAccelerometerUpdates() {
+        motionManager.startAccelerometerUpdates(to: OperationQueue.main) { [weak self] data, error in
+            guard let self = self, let data = data else { return }
+            self.updateSensorData(acceleration: data.acceleration)
+        }
+    }
+
+    func stopAccelerometerUpdates() {
+        motionManager.stopAccelerometerUpdates()
     }
 }
