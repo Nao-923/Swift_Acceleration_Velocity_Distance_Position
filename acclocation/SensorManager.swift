@@ -37,7 +37,7 @@ class SensorManager: ObservableObject {
     
     //その他
     private var dataCount: Int = 0
-    private let threshold: Double = 0.4 // 加速度の閾値
+    private let threshold: Double = 0.1 // 加速度の閾値
     private var rawLog: [String] = []
     private var dataLog: [String] = []
     
